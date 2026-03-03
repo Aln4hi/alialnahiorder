@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام طلبات الليل — متجر الخياطة</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, onValue, update, remove }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ✅ YOUR FIREBASE CONFIG
+  const firebaseConfig = {
+    apiKey: "AIzaSyCUPoopTi04WCmqscRyRLT-JXXdTz-zFp8",
+    authDomain: "order-fills.firebaseapp.com",
+    databaseURL: "https://order-fills-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "order-fills",
+    storageBucket: "order-fills.firebasestorage.app",
+    messagingSenderId: "409088625500",
+    appId: "1:409088625500:web:68402b3bba8a0c67548f99"
+  };
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const ordersRef = ref(db, 'orders');
+
+    window._db = db;
+    window._ref = ref;
+    window._push = push;
+    window._onValue = onValue;
+    window._update = update;
+    window._remove = remove;
+    window._ordersRef = ordersRef;
+    window._firebaseReady = true;
+
+    // Test connection immediately
+    onValue(ref(db, '.info/connected'), (snap) => {
+      if (snap.val() === true) {
+        window._connected = true;
+        window.dispatchEvent(new Event('firebaseConnected'));
+      } else {
+        window._connected = false;
+        window.dispatchEvent(new Event('firebaseDisconnected'));
+      }
+    });
+
+    window.dispatchEvent(new Event('firebaseReady'));
+  } catch(e) {
+    window.dispatchEvent(new CustomEvent('firebaseError', { detail: e.message }));
+  }
+</script>
+
+<style>
+  :root {
+    --ink: #1A1025;
+    --deep: #2D1B4E;
+    --plum: #5B2D8E;
+    --violet: #8B5CF6;
+    --lilac: #C4B5FD;
+    --blush: #F5F0FF;
+    --gold: #F59E0B;
+    --gold-pale: #FEF3C7;
+    --mint: #10B981;
+    --rose: #EF4444;
+    --white: #FFFFFF;
+    --mist: #F8F5FF;
+    --border: #E5D9FF;
+    --text: #3D2A5A;
+    --soft: #8B7AA0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Tajawal', sans-serif;
+    background: var(--mist);
+    min-height: 100vh;
+    color: var(--ink);
+  }
+
+  .header {
+    background: var(--deep);
+    padding: 18px 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 4px 24px rgba(45,27,78,0.4);
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--gold), #F97316);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .brand-name { color: white; font-size: 17px; font-weight: 800; }
+  .brand-sub { color: rgba(255,255,255,0.5); font-size: 12px; }
+
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.3);
+    color: var(--mint);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    transition: all 0.3s;
+  }
+  .live-badge.disconnected {
+    background: rgba(239,68,68,0.15);
+    border-color: rgba(239,68,68,0.3);
+    color: var(--rose);
+  }
+  .live-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--mint);
+    animation: pulse 2s infinite;
+  }
+  .live-badge.disconnected .live-dot { background: var(--rose); animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .tabs { display: flex; gap: 4px; padding: 0 4px; }
+  .tab {
+    flex: 1; padding: 10px 8px;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; border: none;
+    background: none; font-family: 'Tajawal', sans-serif;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .tab-content { display: none; animation: fadeIn 0.25s ease; }
+  .tab-content.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+  .section { max-width: 560px; margin: 20px auto; padding: 0 16px 80px; }
+
+  /* CONNECTION BANNER */
+  .conn-banner {
+    padding: 12px 16px; border-radius: 12px;
+    margin-bottom: 16px; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .conn-ok { background: #D1FAE5; color: #065F46; border: 1px solid #A7F3D0; }
+  .conn-err { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+  .conn-wait { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+
+  .card {
+    background: white; border-radius: 20px; padding: 24px;
+    box-shadow: 0 2px 16px rgba(45,27,78,0.07);
+    border: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .card-title { font-size: 17px; font-weight: 800; color: var(--deep); margin-bottom: 4px; }
+  .card-sub { font-size: 13px; color: var(--soft); margin-bottom: 20px; }
+
+  .fg { margin-bottom: 16px; }
+  .fg label { display: block; font-size: 13px; font-weight: 700; color: var(--plum); margin-bottom: 7px; }
+  .fg label .req { color: var(--rose); }
+  .fg input, .fg select, .fg textarea {
+    width: 100%; padding: 11px 14px;
+    border: 2px solid var(--border); border-radius: 12px;
+    font-family: 'Tajawal', sans-serif; font-size: 14px;
+    color: var(--ink); background: var(--mist); outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .fg input:focus, .fg select:focus, .fg textarea:focus {
+    border-color: var(--violet); background: white;
+  }
+  .fg textarea { resize: vertical; min-height: 72px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .src-btns { display: flex; gap: 10px; }
+  .src-btn {
+    flex: 1; padding: 12px; border: 2px solid var(--border);
+    border-radius: 12px; background: var(--mist);
+    font-family: 'Tajawal', sans-serif;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; color: var(--soft);
+    transition: all 0.2s; text-align: center;
+  }
+  .src-btn.sel { border-color: var(--plum); background: var(--deep); color: white; }
+
+  .prod-box {
+    background: var(--gold-pale); border-radius: 14px;
+    padding: 16px; margin-bottom: 16px; border: 1px solid #FDE68A;
+  }
+  .prod-box h3 { font-size: 14px; font-weight: 800; color: var(--deep); margin-bottom: 12px; }
+  .prod-row {
+    display: grid; grid-template-columns: 1fr 68px 80px auto;
+    gap: 7px; align-items: center; margin-bottom: 8px;
+  }
+  .prod-row input, .prod-row select {
+    padding: 9px 11px; border: 2px solid #FDE68A;
+    border-radius: 10px; font-family: 'Tajawal', sans-serif;
+    font-size: 13px; background: white; outline: none;
+  }
+  .prod-row input:focus, .prod-row select:focus { border-color: var(--violet); }
+  .del-btn {
+    width: 32px; height: 32px; background: #FEE2E2; color: var(--rose);
+    border: none; border-radius: 8px; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .add-row-btn {
+    width: 100%; padding: 9px; background: white;
+    border: 2px dashed #FCD34D; border-radius: 10px; color: var(--plum);
+    font-family: 'Tajawal', sans-serif;
+    font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 4px;
+  }
+
+  .submit-btn {
+    width: 100%; padding: 15px;
+    background: linear-gradient(135deg, var(--plum), var(--deep));
+    color: white; border: none; border-radius: 14px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 16px; font-weight: 800; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(91,45,142,0.35);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .submit-btn:hover { transform: translateY(-2px); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+  .stat {
+    background: white; border-radius: 14px; padding: 14px;
+    text-align: center; border: 1px solid var(--border);
+  }
+  .stat-n { font-size: 28px; font-weight: 800; color: var(--plum); }
+  .stat-l { font-size: 11px; color: var(--soft); margin-top: 2px; font-weight: 600; }
+
+  .filters { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 16px; }
+  .fbtn {
+    padding: 7px 14px; border-radius: 20px;
+    border: 2px solid var(--border); background: white;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 12px; font-weight: 700; cursor: pointer; color: var(--soft);
+    transition: all 0.2s;
+  }
+  .fbtn.active { background: var(--deep); color: white; border-color: var(--deep); }
+
+  .order-card {
+    background: white; border-radius: 16px; padding: 18px;
+    margin-bottom: 12px; border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(45,27,78,0.06);
+    animation: slideIn 0.3s ease; transition: transform 0.15s;
+  }
+  .order-card:hover { transform: translateY(-2px); }
+  @keyframes slideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  .oc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .oc-name { font-size: 16px; font-weight: 800; color: var(--deep); }
+  .oc-time { font-size: 11px; color: var(--soft); margin-top: 3px; }
+  .oc-city {
+    background: var(--gold-pale); color: var(--deep);
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+  }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 10px;
+    font-size: 11px; font-weight: 700; margin-left: 6px; margin-bottom: 8px;
+  }
+  .b-ig { background: #F3E8FF; color: #7C3AED; }
+  .b-wa { background: #D1FAE5; color: #065F46; }
+  .b-pending { background: #FEF3C7; color: #92400E; }
+  .b-confirmed { background: #DBEAFE; color: #1E3A8A; }
+  .b-shipped { background: #D1FAE5; color: #065F46; }
+  .b-done { background: #F0FDF4; color: #14532D; }
+
+  .oc-products { margin-bottom: 10px; }
+  .ptag {
+    display: inline-block; background: var(--blush);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 10px; font-size: 12px; margin: 2px 2px 2px 0; color: var(--text);
+  }
+  .oc-notes {
+    background: #FFFBEB; border-right: 3px solid var(--gold);
+    padding: 8px 12px; border-radius: 0 8px 8px 0;
+    font-size: 12px; color: var(--soft); margin-bottom: 10px;
+  }
+  .oc-phone { font-size: 12px; color: var(--soft); margin-bottom: 8px; }
+
+  .oc-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+  .abtn {
+    padding: 7px 14px; border-radius: 10px; border: none;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  }
+  .abtn:hover { transform: translateY(-1px); }
+  .a-confirm { background: #DBEAFE; color: #1E40AF; }
+  .a-ship { background: #D1FAE5; color: #065F46; }
+  .a-done { background: #F0FDF4; color: #14532D; }
+  .a-del { background: #FEE2E2; color: #991B1B; }
+
+  .ck-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 13px 0; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .ck-item:last-child { border-bottom: none; }
+  .ck-box {
+    width: 24px; height: 24px; flex-shrink: 0;
+    border: 2px solid var(--lilac); border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; margin-top: 1px; font-size: 14px;
+  }
+  .ck-item.done .ck-box { background: var(--mint); border-color: var(--mint); color: white; }
+  .ck-text { font-size: 14px; color: var(--ink); line-height: 1.5; }
+  .ck-item.done .ck-text { text-decoration: line-through; color: var(--soft); }
+  .reset-btn {
+    width: 100%; padding: 14px; background: var(--deep); color: white;
+    border: none; border-radius: 12px; font-family: 'Tajawal', sans-serif;
+    font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 12px;
+  }
+
+  .empty { text-align: center; padding: 50px 20px; color: var(--soft); }
+  .empty .ei { font-size: 56px; margin-bottom: 14px; }
+  .empty h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--deep); color: white;
+    padding: 12px 24px; border-radius: 30px;
+    font-size: 14px; font-weight: 700;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    opacity: 0; transition: all 0.3s; z-index: 999; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 420px) {
+    .two-col { grid-template-columns: 1fr; }
+    .prod-row { grid-template-columns: 1fr 60px auto; }
+    .prod-row select { display: none; }
+  }
+</style>
+
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="brand">
+      <div class="brand-icon">🧵</div>
+      <div>
+        <div class="brand-name">طلبات الليل</div>
+        <div class="brand-sub">مزامنة فورية ⚡</div>
+      </div>
+    </div>
+    <div class="live-badge disconnected" id="liveBadge">
+      <div class="live-dot"></div>
+      <span id="liveText">جاري الاتصال...</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('form',this)">📝 طلب جديد</button>
+    <button class="tab" onclick="switchTab('orders',this)">📋 الطلبات</button>
+    <button class="tab" onclick="switchTab('checklist',this)">✅ الصباح</button>
+  </div>
+</div>
+
+<!-- TAB: FORM -->
+
+<div id="tab-form" class="tab-content active">
+  <div class="section">
+    <div class="card">
+      <div class="card-title">📝 تسجيل طلب جديد</div>
+      <div class="card-sub">سجّل الطلب فوراً — يظهر عند المدير فوراً ⚡</div>
+
+```
+  <div class="fg">
+    <label>مصدر الطلب <span class="req">*</span></label>
+    <div class="src-btns">
+      <button class="src-btn" id="src-ig" onclick="selSrc('ig')">📸 إنستغرام</button>
+      <button class="src-btn" id="src-wa" onclick="selSrc('wa')">💬 واتساب</button>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="fg">
+      <label>اسم الزبون <span class="req">*</span></label>
+      <input id="cName" type="text" placeholder="اسم الزبون">
+    </div>
+    <div class="fg">
+      <label>رقم الهاتف</label>
+      <input id="cPhone" type="tel" placeholder="07X-XXX-XXXX">
+    </div>
+  </div>
+
+  <div class="fg">
+    <label>المحافظة <span class="req">*</span></label>
+    <select id="cCity">
+      <option value="">اختر المحافظة</option>
+      <option>بغداد</option><option>البصرة</option><option>الموصل</option>
+      <option>أربيل</option><option>النجف</option><option>كربلاء</option>
+      <option>كركوك</option><option>السليمانية</option><option>ذي قار</option>
+      <option>ديالى</option><option>الأنبار</option><option>بابل</option>
+      <option>واسط</option><option>ميسان</option><option>المثنى</option>
+      <option>القادسية</option><option>صلاح الدين</option><option>دهوك</option>
+    </select>
+  </div>
+
+  <div class="prod-box">
+    <h3>🛍️ المنتجات المطلوبة</h3>
+    <div id="prodList">
+      <div class="prod-row">
+        <input type="text" placeholder="اسم المنتج">
+        <input type="number" min="1" value="1">
+        <select><option>متر</option><option>قطعة</option><option>كيس</option><option>دزينة</option><option>لفة</option></select>
+      </div>
+    </div>
+    <button class="add-row-btn" onclick="addProd()">+ أضف منتج آخر</button>
+  </div>
+
+  <div class="fg">
+    <label>ملاحظات</label>
+    <textarea id="cNotes" placeholder="لون معين، مقاس، طريقة دفع..."></textarea>
+  </div>
+
+  <button class="submit-btn" id="submitBtn" onclick="submitOrder()">✅ حفظ الطلب ومشاركته فوراً</button>
+</div>
+```
+
+  </div>
+</div>
+
+<!-- TAB: ORDERS -->
+
+<div id="tab-orders" class="tab-content">
+  <div class="section">
+    <div id="connBanner" class="conn-banner conn-wait">⏳ جاري الاتصال بقاعدة البيانات...</div>
+
+```
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="s-total">0</div><div class="stat-l">إجمالي</div></div>
+  <div class="stat"><div class="stat-n" id="s-pending" style="color:#B45309">0</div><div class="stat-l">جديدة</div></div>
+  <div class="stat"><div class="stat-n" id="s-done" style="color:#059669">0</div><div class="stat-l">منجزة</div></div>
+</div>
+
+<div class="filters">
+  <button class="fbtn active" onclick="setFilter('all',this)">الكل</button>
+  <button class="fbtn" onclick="setFilter('pending',this)">⏳ جديد</button>
+  <button class="fbtn" onclick="setFilter('confirmed',this)">✅ مؤكد</button>
+  <button class="fbtn" onclick="setFilter('shipped',this)">🚚 شحن</button>
+  <button class="fbtn" onclick="setFilter('done',this)">🎉 منجز</button>
+</div>
+
+<div id="ordersList"><div class="empty"><div class="ei">⏳</div><h3>جاري تحميل الطلبات...</h3></div></div>
+```
+
+  </div>
+</div>
+
+<!-- TAB: CHECKLIST -->
+
+<div id="tab-checklist" class="tab-content">
+  <div class="section">
+    <div class="card">
+      <div class="card-title">☀️ قائمة مهام الصباح</div>
+      <div class="card-sub">افتحها أول شي كل يوم قبل ما تبدأ — للأدمن</div>
+
+```
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">📋 افتح تاب "الطلبات" وشوف كل الطلبات الجديدة من الليل</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">📸 راجع سكرين شوتات واتساب وإنستغرام — تأكد ما فات طلب غير مسجل</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">✅ غير حالة كل طلب من "جديد" إلى "مؤكد" بعد مراجعة التفاصيل</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">📦 تأكد من وجود كل المنتجات بالمخزن قبل التعبئة</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">💬 أرسل تأكيد لكل زبون: "طلبك تم تأكيده وراح يُشحن اليوم ✅"</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">🧾 افتح تفاصيل كل طلب بالنظام وانت تعبي — لا تعتمد على الذاكرة</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">✂️ قبل ما تسكر الكرتون — اقرأ المنتجات بصوت عالي وتأكد</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">🚚 سلم الطلبات للمندوب وغير الحالة إلى "تم الشحن"</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">📊 حدّث المخزن بالنظام بعد كل طلب مشحون</div></div>
+  <div class="ck-item" onclick="toggleCk(this)"><div class="ck-box"></div><div class="ck-text">🎉 غير الطلبات المشحونة إلى "منجز" بعد تأكيد الوصول للزبون</div></div>
+
+  <button class="reset-btn" onclick="resetCk()">🔄 إعادة تعيين لليوم التالي</button>
+</div>
+```
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allOrders = {};
+let curFilter = 'all';
+let selSrcVal = '';
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function selSrc(s) {
+  selSrcVal = s;
+  document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('src-' + s).classList.add('sel');
+}
+
+function addProd() {
+  const list = document.getElementById('prodList');
+  const row = document.createElement('div');
+  row.className = 'prod-row';
+  row.innerHTML = `
+    <input type="text" placeholder="اسم المنتج">
+    <input type="number" min="1" value="1">
+    <select><option>متر</option><option>قطعة</option><option>كيس</option><option>دزينة</option><option>لفة</option></select>
+    <button class="del-btn" onclick="this.parentElement.remove()">×</button>`;
+  list.appendChild(row);
+}
+
+function getProds() {
+  return [...document.querySelectorAll('#prodList .prod-row')].map(r => {
+    const inputs = r.querySelectorAll('input');
+    return { name: inputs[0].value.trim(), qty: inputs[1].value || '1', unit: r.querySelector('select').value };
+  }).filter(p => p.name);
+}
+
+async function submitOrder() {
+  if (!window._firebaseReady) { showToast('⚠️ جاري الاتصال، انتظر لحظة'); return; }
+  const name = document.getElementById('cName').value.trim();
+  const city = document.getElementById('cCity').value;
+  if (!name) { showToast('⚠️ يرجى إدخال اسم الزبون'); return; }
+  if (!city) { showToast('⚠️ يرجى اختيار المحافظة'); return; }
+  if (!selSrcVal) { showToast('⚠️ يرجى اختيار مصدر الطلب'); return; }
+  const prods = getProds();
+  if (!prods.length) { showToast('⚠️ يرجى إضافة منتج واحد على الأقل'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '⏳ جاري الحفظ...';
+
+  try {
+    await window._push(window._ordersRef, {
+      name, city,
+      phone: document.getElementById('cPhone').value.trim(),
+      notes: document.getElementById('cNotes').value.trim(),
+      products: prods, source: selSrcVal, status: 'pending',
+      time: new Date().toLocaleString('ar-IQ')
+    });
+    showToast('✅ تم حفظ الطلب ومشاركته فوراً!');
+    resetForm();
+  } catch(e) {
+    showToast('❌ خطأ: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '✅ حفظ الطلب ومشاركته فوراً';
+}
+
+function resetForm() {
+  ['cName','cPhone','cNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cCity').value = '';
+  document.getElementById('prodList').innerHTML = `<div class="prod-row">
+    <input type="text" placeholder="اسم المنتج">
+    <input type="number" min="1" value="1">
+    <select><option>متر</option><option>قطعة</option><option>كيس</option><option>دزينة</option><option>لفة</option></select>
+  </div>`;
+  selSrcVal = '';
+  document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('sel'));
+}
+
+// Firebase connection events
+window.addEventListener('firebaseReady', () => {
+  window._onValue(window._ordersRef, snap => {
+    allOrders = snap.val() || {};
+    renderOrders();
+  });
+});
+
+window.addEventListener('firebaseConnected', () => {
+  const badge = document.getElementById('liveBadge');
+  badge.classList.remove('disconnected');
+  document.getElementById('liveText').textContent = 'متصل مباشر';
+  const banner = document.getElementById('connBanner');
+  if (banner) { banner.className = 'conn-banner conn-ok'; banner.textContent = '🟢 متصل — المزامنة تعمل بشكل مثالي'; }
+});
+
+window.addEventListener('firebaseDisconnected', () => {
+  const badge = document.getElementById('liveBadge');
+  badge.classList.add('disconnected');
+  document.getElementById('liveText').textContent = 'غير متصل';
+  const banner = document.getElementById('connBanner');
+  if (banner) { banner.className = 'conn-banner conn-err'; banner.textContent = '🔴 انقطع الاتصال — تحقق من الإنترنت'; }
+});
+
+window.addEventListener('firebaseError', (e) => {
+  const banner = document.getElementById('connBanner');
+  if (banner) { banner.className = 'conn-banner conn-err'; banner.textContent = '🔴 خطأ: ' + e.detail; }
+});
+
+function renderOrders() {
+  const list = document.getElementById('ordersList');
+  const entries = Object.entries(allOrders).reverse();
+  const filtered = curFilter === 'all' ? entries : entries.filter(([,o]) => o.status === curFilter);
+
+  document.getElementById('s-total').textContent = entries.length;
+  document.getElementById('s-pending').textContent = entries.filter(([,o]) => o.status === 'pending').length;
+  document.getElementById('s-done').textContent = entries.filter(([,o]) => o.status === 'done').length;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty"><div class="ei">📭</div><h3>لا يوجد طلبات</h3><p>الطلبات ستظهر هنا فور تسجيلها</p></div>`;
+    return;
+  }
+
+  const sMap = { pending:'جديد ⏳', confirmed:'مؤكد ✅', shipped:'شُحن 🚚', done:'منجز 🎉' };
+  const sCls = { pending:'b-pending', confirmed:'b-confirmed', shipped:'b-shipped', done:'b-done' };
+
+  list.innerHTML = filtered.map(([id, o]) => `
+    <div class="order-card">
+      <div class="oc-top">
+        <div><div class="oc-name">${o.name}</div><div class="oc-time">🕐 ${o.time}</div></div>
+        <div class="oc-city">📍 ${o.city}</div>
+      </div>
+      <span class="badge ${o.source==='ig'?'b-ig':'b-wa'}">${o.source==='ig'?'📸 إنستغرام':'💬 واتساب'}</span>
+      <span class="badge ${sCls[o.status]}">${sMap[o.status]}</span>
+      ${o.phone?`<div class="oc-phone">📞 ${o.phone}</div>`:''}
+      <div class="oc-products">${(o.products||[]).map(p=>`<span class="ptag">🧵 ${p.name} — ${p.qty} ${p.unit}</span>`).join('')}</div>
+      ${o.notes?`<div class="oc-notes">📝 ${o.notes}</div>`:''}
+      <div class="oc-actions">
+        ${o.status==='pending'?`<button class="abtn a-confirm" onclick="updStatus('${id}','confirmed')">✅ تأكيد</button>`:''}
+        ${o.status==='confirmed'?`<button class="abtn a-ship" onclick="updStatus('${id}','shipped')">🚚 تم الشحن</button>`:''}
+        ${o.status==='shipped'?`<button class="abtn a-done" onclick="updStatus('${id}','done')">🎉 منجز</button>`:''}
+        <button class="abtn a-del" onclick="delOrder('${id}')">🗑️ حذف</button>
+      </div>
+    </div>`).join('');
+}
+
+async function updStatus(id, status) {
+  try {
+    await window._update(window._ref(window._db, 'orders/' + id), { status });
+    showToast('✅ تم تحديث الحالة');
+  } catch(e) { showToast('❌ خطأ في التحديث'); }
+}
+
+async function delOrder(id) {
+  if (confirm('حذف هذا الطلب نهائياً؟')) {
+    try {
+      await window._remove(window._ref(window._db, 'orders/' + id));
+      showToast('🗑️ تم حذف الطلب');
+    } catch(e) { showToast('❌ خطأ في الحذف'); }
+  }
+}
+
+function setFilter(f, btn) {
+  curFilter = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderOrders();
+}
+
+function toggleCk(el) {
+  el.classList.toggle('done');
+  el.querySelector('.ck-box').textContent = el.classList.contains('done') ? '✓' : '';
+}
+
+function resetCk() {
+  document.querySelectorAll('.ck-item').forEach(el => {
+    el.classList.remove('done');
+    el.querySelector('.ck-box').textContent = '';
+  });
+  showToast('🔄 تم إعادة تعيين القائمة');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+</body>
+</html>
