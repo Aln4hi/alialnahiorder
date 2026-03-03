@@ -312,10 +312,14 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 .add-edit-prod-btn { width: 100%; padding: 9px; background: white; border: 2px dashed #FCD34D; border-radius: 10px; color: var(--plum); font-family: 'Tajawal', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 12px; }
 
 /* RECEIPT MODAL WRAPPER */
-.receipt-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 300; align-items: center; justify-content: center; padding: 16px; }
+.receipt-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 300; align-items: flex-end; justify-content: center; }
 .receipt-overlay.open { display: flex; }
-.receipt-wrap { background: #F8F5FF; border-radius: 24px; width: 100%; max-width: 420px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
-.receipt-actions { display: flex; gap: 10px; padding: 14px 16px; background: white; border-top: 1px solid var(--border); }
+.receipt-wrap { background: #F8F5FF; border-radius: 24px 24px 0 0; width: 100%; max-width: 480px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 -8px 40px rgba(0,0,0,0.4); overflow: hidden; animation: rcUp 0.3s cubic-bezier(0.16,1,0.3,1); }
+@keyframes rcUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.receipt-handle { flex-shrink: 0; height: 20px; display: flex; align-items: center; justify-content: center; background: white; }
+.receipt-handle::after { content: ''; width: 40px; height: 4px; background: var(--border); border-radius: 4px; }
+.receipt-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.receipt-actions { flex-shrink: 0; display: flex; gap: 10px; padding: 14px 16px 32px; background: white; border-top: 1px solid var(--border); box-shadow: 0 -4px 20px rgba(0,0,0,0.06); }
 .receipt-actions button { flex: 1; padding: 12px; border: none; border-radius: 12px; font-family: 'Tajawal', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
 .receipt-actions button:hover { transform: translateY(-1px); }
 .btn-save-img { background: linear-gradient(135deg, var(--plum), var(--deep)); color: white; box-shadow: 0 4px 12px rgba(91,45,142,0.3); }
@@ -368,7 +372,7 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 .rc-logo-text { text-align: right; }
 .rc-logo-name {
   font-size: 22px; font-weight: 900; color: white;
-  letter-spacing: -0.5px; line-height: 1.1;
+  line-height: 1.1; font-family: 'Tajawal', sans-serif;
 }
 .rc-logo-sub {
   font-size: 11px; color: rgba(255,255,255,0.6);
@@ -379,9 +383,9 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
   background: rgba(245,158,11,0.2);
   border: 1px solid rgba(245,158,11,0.4);
   color: #F59E0B;
-  font-size: 11px; font-weight: 800;
+  font-size: 12px; font-weight: 800;
   padding: 4px 14px; border-radius: 20px;
-  margin-top: 6px; letter-spacing: 0.5px;
+  margin-top: 6px; font-family: 'Tajawal', sans-serif;
 }
 
 /* DIVIDER WAVE */
@@ -405,10 +409,10 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 
 /* SECTION LABEL */
 .rc-section-label {
-  font-size: 10px; font-weight: 800; color: var(--violet);
-  letter-spacing: 1.5px; text-transform: uppercase;
+  font-size: 12px; font-weight: 800; color: var(--violet);
   margin-bottom: 10px; margin-top: 18px;
   display: flex; align-items: center; gap: 6px;
+  font-family: 'Tajawal', sans-serif;
 }
 .rc-section-label::after {
   content: ''; flex: 1; height: 1px;
@@ -723,9 +727,12 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 <!-- RECEIPT MODAL -->
 <div class="receipt-overlay" id="receiptModal">
   <div class="receipt-wrap">
-    <div id="receiptContent"></div>
+    <div class="receipt-handle"></div>
+    <div class="receipt-scroll">
+      <div id="receiptContent"></div>
+    </div>
     <div class="receipt-actions">
-      <button class="btn-save-img" onclick="saveReceiptAsImage()">📥 حفظ كصورة</button>
+      <button class="btn-save-img" id="saveReceiptBtn" onclick="saveReceiptAsImage()">📥 حفظ كصورة</button>
       <button class="btn-close-receipt" onclick="closeReceipt()">✕ إغلاق</button>
     </div>
   </div>
@@ -1323,25 +1330,95 @@ function closeReceipt() { document.getElementById('receiptModal').classList.remo
 
 async function saveReceiptAsImage() {
   const el = document.getElementById('receiptContent');
-  showToast('⏳ جاري تحضير الإيصال بجودة عالية...');
+  const btn = document.getElementById('saveReceiptBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري...'; }
+  showToast('⏳ جاري تحضير الإيصال...');
   try {
+    // Wait for fonts
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    await new Promise(r => setTimeout(r, 400));
+
     const canvas = await html2canvas(el, {
-      scale: 4,
+      scale: 3,
       backgroundColor: '#ffffff',
       useCORS: true,
       logging: false,
       imageTimeout: 0,
-      allowTaint: true
+      allowTaint: true,
+      onclone: (doc) => {
+        // Inject Tajawal font directly into cloned doc so html2canvas renders it correctly
+        const link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap';
+        doc.head.appendChild(link);
+        // Force consistent font rendering — fixes glitchy text
+        const s = doc.createElement('style');
+        s.textContent = `
+          * {
+            font-family: 'Tajawal', Arial, sans-serif !important;
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
+            text-transform: none !important;
+            -webkit-font-smoothing: antialiased !important;
+          }
+          .rc-wave::after, .rc-banner::before, .rc-banner::after,
+          .rc-section-label::after { display: none !important; }
+        `;
+        doc.head.appendChild(s);
+      }
     });
-    const link = document.createElement('a');
-    link.download = 'ali-alnahi-' + Date.now() + '.png';
-    link.href = canvas.toDataURL('image/png', 1.0);
-    link.click();
-    showToast('✅ تم حفظ الإيصال بجودة عالية — أرسله للزبون!');
+
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    if (isIOS) {
+      // iOS can't download — show image inline for long-press save
+      showSaveOverlay(dataUrl);
+    } else {
+      const a = document.createElement('a');
+      a.download = 'ali-alnahi-' + Date.now() + '.png';
+      a.href = dataUrl; a.click();
+      showToast('✅ تم حفظ الإيصال — أرسله للزبون!');
+    }
   } catch(e) {
     showToast('❌ خطأ في الحفظ');
     console.error(e);
   }
+  if (btn) { btn.disabled = false; btn.textContent = '📥 حفظ كصورة'; }
+}
+
+function showSaveOverlay(dataUrl) {
+  const ex = document.getElementById('imgSaveOv'); if (ex) ex.remove();
+  const ov = document.createElement('div');
+  ov.id = 'imgSaveOv';
+  Object.assign(ov.style, {
+    position:'fixed', inset:'0', background:'rgba(0,0,0,0.93)', zIndex:'9999',
+    display:'flex', flexDirection:'column', alignItems:'center',
+    padding:'16px', overflowY:'auto', WebkitOverflowScrolling:'touch', gap:'14px'
+  });
+  const tip = document.createElement('div');
+  Object.assign(tip.style, {
+    flexShrink:'0', width:'100%', maxWidth:'440px', color:'#F59E0B',
+    fontFamily:"'Tajawal',Arial,sans-serif", fontSize:'15px', fontWeight:'700',
+    textAlign:'center', direction:'rtl', background:'rgba(245,158,11,0.15)',
+    border:'1px solid rgba(245,158,11,0.4)', padding:'14px',
+    borderRadius:'14px', lineHeight:'1.9'
+  });
+  tip.innerHTML = '📸 اضغط مطولاً على الصورة<br>ثم اختر <b>"حفظ الصورة"</b>';
+  const cb = document.createElement('button');
+  Object.assign(cb.style, {
+    flexShrink:'0', background:'rgba(255,255,255,0.12)', color:'white',
+    border:'1px solid rgba(255,255,255,0.25)', padding:'11px 36px',
+    borderRadius:'30px', fontFamily:"'Tajawal',Arial,sans-serif",
+    fontSize:'14px', fontWeight:'700', cursor:'pointer'
+  });
+  cb.textContent = '✕ إغلاق';
+  cb.addEventListener('click', () => ov.remove());
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  Object.assign(img.style, { width:'100%', maxWidth:'440px', borderRadius:'14px', display:'block' });
+  ov.appendChild(tip); ov.appendChild(cb); ov.appendChild(img);
+  document.body.appendChild(ov);
 }
 
 // ══════════════════════════════════════════════
