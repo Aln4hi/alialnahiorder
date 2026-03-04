@@ -519,10 +519,11 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 
 @media (max-width: 480px) {
   .two-col { grid-template-columns: 1fr; }
-  .prod-row-top { grid-template-columns: 1fr 55px 55px auto; }
-  .prod-row-top select { display: none; }
-  .edit-prod-top { grid-template-columns: 1fr 55px 55px auto; }
-  .edit-prod-top select { display: none; }
+  .prod-row-top { grid-template-columns: 1fr 50px 62px 72px auto; gap: 5px; }
+  .prod-row-top select { display: block; padding: 9px 2px; font-size: 11px; text-align: center; }
+  .edit-prod-top { grid-template-columns: 1fr 50px 62px 72px auto; gap: 5px; }
+  .edit-prod-top select { display: block; padding: 9px 2px; font-size: 11px; text-align: center; }
+  .prod-col-headers { grid-template-columns: 1fr 50px 62px 72px auto !important; gap: 5px !important; }
 }
 </style>
 </head>
@@ -632,10 +633,9 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 
         <div class="prod-box">
           <h3>🛍️ المنتجات المطلوبة</h3>
-          <div style="display:grid;grid-template-columns:1fr 58px 70px 80px auto;gap:7px;padding:0 0 8px;font-size:11px;font-weight:700;color:var(--soft);">
+          <div class="prod-col-headers" style="display:grid;grid-template-columns:1fr 58px 70px 80px auto;gap:7px;padding:0 0 8px;font-size:11px;font-weight:700;color:var(--soft);">
             <span>اسم المنتج</span><span style="text-align:center">كمية</span><span style="text-align:center">وحدة</span><span style="text-align:center;color:var(--mint)">💰 سعر</span><span></span>
           </div>
-          <div id="prodList"></div>
           <button class="add-row-btn" onclick="addProd('prodList')">+ أضف منتج آخر</button>
         </div>
 
@@ -710,7 +710,7 @@ body { font-family: 'Tajawal', sans-serif; background: var(--mist); min-height: 
 <div class="modal-overlay" id="editModal">
   <div class="modal">
     <div class="modal-title">✏️ تعديل الطلب <button class="modal-close" onclick="closeEditModal()">✕</button></div>
-    <div style="display:grid;grid-template-columns:1fr 58px 70px 80px auto;gap:7px;padding:0 0 8px;font-size:11px;font-weight:700;color:var(--soft);">
+    <div class="prod-col-headers" style="display:grid;grid-template-columns:1fr 58px 70px 80px auto;gap:7px;padding:0 0 8px;font-size:11px;font-weight:700;color:var(--soft);">
       <span>اسم المنتج</span><span style="text-align:center">كمية</span><span style="text-align:center">وحدة</span><span style="text-align:center;color:var(--mint)">💰 سعر</span><span></span>
     </div>
     <div id="editProdList"></div>
@@ -1472,10 +1472,24 @@ async function drawReceiptCanvas(o, id) {
     ctx.fillStyle='#F8F5FF'; rr(PAD,y,W-PAD*2,PROD_H-6,12); ctx.fill();
     ctx.strokeStyle='#E5D9FF'; ctx.lineWidth=1; rr(PAD,y,W-PAD*2,PROD_H-6,12); ctx.stroke();
 
-    // placeholder icon
-    ctx.fillStyle='#EDE9FE'; rr(PAD+8,y+7,38,38,10); ctx.fill();
-    ctx.font='20px Arial'; ctx.textAlign='center';
-    ctx.fillText('🧵', PAD+8+19, y+7+26);
+    // product photo or placeholder
+    if (p.photo) {
+      try {
+        const pImg = new Image();
+        pImg.crossOrigin = 'anonymous';
+        await new Promise((res) => { pImg.onload=res; pImg.onerror=res; pImg.src=p.photo; });
+        if (pImg.naturalWidth > 0) {
+          ctx.save(); rr(PAD+8,y+7,38,38,10); ctx.clip();
+          ctx.drawImage(pImg,PAD+8,y+7,38,38); ctx.restore();
+        } else { throw new Error('load failed'); }
+      } catch(_) {
+        ctx.fillStyle='#EDE9FE'; rr(PAD+8,y+7,38,38,10); ctx.fill();
+        ctx.font='20px Arial'; ctx.textAlign='center'; ctx.fillText('🧵',PAD+8+19,y+7+26);
+      }
+    } else {
+      ctx.fillStyle='#EDE9FE'; rr(PAD+8,y+7,38,38,10); ctx.fill();
+      ctx.font='20px Arial'; ctx.textAlign='center'; ctx.fillText('🧵',PAD+8+19,y+7+26);
+    }
 
     // product name (right side)
     ctx.font='800 13px Arial'; ctx.fillStyle='#2D1B4E';
